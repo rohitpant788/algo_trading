@@ -1,17 +1,16 @@
-import time
 import datetime
+import time
+import helper
 
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 import helper
 import kite_automation_config
 
 driver = helper.get_driver()
-range_high = 0
-range_low = 0
+range_high = 840
+range_low = 826
 
 start_tracking_time = datetime.datetime.now().replace(hour=kite_automation_config.KITE_ORB_START_TIME_HOUR,
                                                       minute=kite_automation_config.KITE_ORB_START_TIME_MIN, second=0,
@@ -41,7 +40,7 @@ def fetch_high_low(candle_size_in_mins):
         while now < stop_tracking_time:
             now = datetime.datetime.now()
             print(f'now : {now}')
-            print(f'now : {stop_tracking_time}')
+            print(f'stop_tracking_time : {stop_tracking_time}')
             start_tracking_high_low_range()
 
 
@@ -99,6 +98,7 @@ def get_range_high():
 
 
 def trade_the_breakout():
+    order_type=''
     while True:
         if get_range_low() == 0:
             print(f'Range low is {get_range_low()}')
@@ -106,18 +106,21 @@ def trade_the_breakout():
         element_current_price = float(driver.find_element(By.XPATH, kite_automation_config.KITE_STOCK_PRICE).text)
         if get_range_low() > element_current_price:
             print(f' Place the MIS sell order')
-            place_order('sell', element_current_price)
+            place_order('sell', element_current_price,kite_automation_config.KITE_ORB_QTY)
+            order_type='sell'
             break
 
         if element_current_price > get_range_high():
             print(f' Place the MIS buy order')
-            place_order('buy', element_current_price)
+            place_order('buy', element_current_price,kite_automation_config.KITE_ORB_QTY)
+            order_type='buy'
             break
-    return None
+    #return order_type TODO
+    return 'buy'
 
 
-def place_order(order_type, price):
-    print(f' {order_type} placed')
+def place_order(order_type, price,qty):
+    print(f' Placing the {order_type} ')
     element_to_hover = driver.find_element(By.XPATH, kite_automation_config.KITE_STOCK_ICICI_LABEL)
     # Hover over the element
     hover = ActionChains(driver).move_to_element(element_to_hover)
@@ -135,12 +138,80 @@ def place_order(order_type, price):
     # Selecting Intraday Option
     helper.click_label_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_INTRADAY)
 
+    # Click on Limit order type price for trade.
+    helper.click_label_by_xpath(driver, kite_automation_config.KITE_ORDER_LIMIT_ORDER_TYPE)
+
     # Input quantity for trade
     helper.input_field_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_QUANTITY,
-                                kite_automation_config.KITE_ORB_QTY)
+                                qty)
 
     # Input price for trade.
-    helper.input_field_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_PRICE, price)
+    helper.input_field_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_PRICE, helper.round_nearest(price,0.05))
+
+    # Place Order
+    helper.click_label_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_ORDER_BTN)
+
+def close_order(order_type):
+    #Select Positions tab
+    helper.click_label_by_xpath(driver, kite_automation_config.KITE_POSITION_TAB)
+
+    #Select ICICIBANK Position
+    helper.click_label_by_xpath(driver, kite_automation_config.KITE_POSITION_ICICI)
+
+    #Read Quantity
+    qty = int(driver.find_element(By.XPATH, kite_automation_config.KITE_POSITION_QTY).text)
+
+    #Read Avg Price
+    avg_price = float(driver.find_element(By.XPATH, kite_automation_config.KITE_POSITION_AVG_PRICE).text)
+
+    #Hardcoded profit is 1 Rs , placing the take profit order #TODO
+    place_order(order_type,avg_price+1,qty)
+
+    #Calculating the sl_price for our order.
+    if order_type == kite_automation_config.ORDER_TYPE_SELL:
+        sl_price = get_range_low()
+    else :
+        sl_price = get_range_high()
+
+    place_order_sl(order_type,sl_price,qty)
+
+    return None
+
+def place_order_sl(order_type,price,qty):
+    print(f'Placing SL {order_type}')
+    element_to_hover = driver.find_element(By.XPATH, kite_automation_config.KITE_STOCK_ICICI_LABEL)
+    # Hover over the element
+    hover = ActionChains(driver).move_to_element(element_to_hover)
+    hover.perform()
+
+
+    if order_type == 'buy':
+        # Selecting Order pane
+        helper.click_label_by_xpath(driver, kite_automation_config.KITE_STOCK_BUY_LABEL)
+        trigger_price = helper.round_nearest(price,0.05) -0.05
+    else:
+        helper.click_label_by_xpath(driver, kite_automation_config.KITE_STOCK_SELL_LABEL)
+        trigger_price = helper.round_nearest(price,0.05)+0.05
+
+
+    # Selecting Order pane
+    helper.click_label_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_REGULAR)
+
+    # Selecting Intraday Option
+    helper.click_label_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_INTRADAY)
+
+    # Click on SL order type price for trade.
+    helper.click_label_by_xpath(driver, kite_automation_config.KITE_ORDER_SL_ORDER_TYPE)
+
+    # Input quantity for trade
+    helper.input_field_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_QUANTITY,
+                                qty)
+
+    # Input price for trade.
+    helper.input_field_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_PRICE, helper.round_nearest(price,0.05))
+
+    # Input trigger price for trade.
+    helper.input_field_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_TRIGGER_PRICE, trigger_price)
 
     # Place Order
     helper.click_label_by_xpath(driver, kite_automation_config.KITE_ORDER_PANE_ORDER_BTN)

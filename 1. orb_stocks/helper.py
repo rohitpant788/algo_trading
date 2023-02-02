@@ -1,4 +1,5 @@
 from selenium import webdriver
+from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -49,5 +50,11 @@ def input_field_by_xpath(driver, xpath, field_value):
     wait.until(EC.visibility_of_element_located((By.XPATH, xpath)))
     element = driver.find_element(By.XPATH, xpath)
     if element.is_displayed():
+        time.sleep(kite_automation_config.DELAY_IN_SEC)
         element.clear()
+        element.send_keys(Keys.CONTROL + 'a')
+        element.send_keys(Keys.DELETE)
         element.send_keys(field_value)
+
+def round_nearest(x,a):
+    return round(round(x/a)*a,2)
